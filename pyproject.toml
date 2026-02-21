@@ -1,7 +1,17 @@
 [project]
-name = "london-neurotech-hackathon-2026"
+name = "neurostasis"
 version = "0.1.0"
-description = "Add your description here"
+description = "Using EEG (and pupil) data to identify cognitive disruptions, which will be altered using neuromodulation techniques"
 readme = "README.md"
-requires-python = ">=3.11"
+authors = [
+    { name = "Ivan Sowerby", email = "me@ivan.engineer" }
+]
+requires-python = ">=3.13"
 dependencies = []
+
+[project.scripts]
+neurostasis = "neurostasis:main"
+
+[build-system]
+requires = ["uv_build>=0.10.0,<0.11.0"]
+build-backend = "uv_build"

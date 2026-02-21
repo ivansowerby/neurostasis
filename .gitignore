@@ -12,3 +12,4 @@ wheels/
 # User-defined
 .docs
 notes.md
+src/data
