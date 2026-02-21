@@ -7,7 +7,11 @@ authors = [
     { name = "Ivan Sowerby", email = "me@ivan.engineer" }
 ]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "gpype>=2.1.2",
+    "pupil-labs-realtime-api>=1.7.3",
+    "pylsl>=1.18.1",
+]
 
 [project.scripts]
 neurostasis = "neurostasis:main"
