@@ -16,6 +16,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from .eeg import EEGConfig, EEGRunner
+from .eeg.attention import AttentionState, latest_attention_states
 from .engagement import register_engagement_routes
 from .engagement_store import append_engagement_record
 
@@ -152,9 +154,40 @@ def _run_acquisition(cfg: StartRequest) -> None:
     t0 = time.time()
     samples: list[tuple[float, Optional[float]]] = []
     gaze_trace: list[tuple[float, float]] = []
+    eeg_trace: list[AttentionState] = []
     last_tick = -1.0
     last_gaze_emit = -1.0
+    last_eeg_poll = -1.0
+    last_eeg_log = -1.0
     current_phase = "BASELINE"
+    latest_eeg: Optional[AttentionState] = None
+    eeg_runner: Optional[EEGRunner] = None
+    eeg_thread: Optional[threading.Thread] = None
+    eeg_error: Optional[str] = None
+    eeg_status = "not_started"
+
+    def _run_eeg() -> None:
+        nonlocal eeg_error
+        if eeg_runner is None:
+            return
+        try:
+            eeg_runner.run()
+        except Exception as exc:
+            eeg_error = str(exc)
+            _broadcast({"type": "log", "msg": f"EEG stopped: {eeg_error}"})
+
+    try:
+        eeg_runner = EEGRunner(EEGConfig(enable_ui=False))
+        eeg_thread = threading.Thread(target=_run_eeg, daemon=True)
+        eeg_thread.start()
+        eeg_status = "running"
+        _broadcast({"type": "log", "msg": "EEG attention stream started."})
+    except Exception as exc:
+        eeg_runner = None
+        eeg_thread = None
+        eeg_error = str(exc)
+        eeg_status = "unavailable"
+        _broadcast({"type": "log", "msg": f"EEG unavailable: {eeg_error}"})
 
     try:
         while True:
@@ -205,6 +238,39 @@ def _run_acquisition(cfg: StartRequest) -> None:
                 _broadcast(gaze_event)
                 last_gaze_emit = elapsed
 
+            if eeg_runner is not None and elapsed - last_eeg_poll >= 0.05:
+                try:
+                    eeg_states = latest_attention_states(eeg_runner, count=1)
+                except Exception as exc:
+                    eeg_states = []
+                    if eeg_error is None:
+                        eeg_error = str(exc)
+                        _broadcast({"type": "log", "msg": f"EEG polling error: {eeg_error}"})
+                if eeg_states:
+                    latest_eeg = eeg_states[0]
+                    eeg_trace.append(latest_eeg)
+                    with _snapshot_lock:
+                        _snapshot.update(
+                            {
+                                "eeg_concentration_score": round(latest_eeg.concentration_score, 3),
+                                "eeg_alpha_theta_ratio": round(latest_eeg.alpha_theta_ratio, 6),
+                                "eeg_status": eeg_status,
+                            }
+                        )
+                    if elapsed - last_eeg_log >= 1.0:
+                        _broadcast(
+                            {
+                                "type": "log",
+                                "msg": (
+                                    "EEG attention "
+                                    f"{latest_eeg.concentration_score:.1f}/100 | "
+                                    f"alpha/theta {latest_eeg.alpha_theta_ratio:.3f}"
+                                ),
+                            }
+                        )
+                        last_eeg_log = elapsed
+                last_eeg_poll = elapsed
+
             if elapsed - last_tick >= 1.0:
                 tick = {
                     "type": "tick",
@@ -215,6 +281,13 @@ def _run_acquisition(cfg: StartRequest) -> None:
                     "gaze_x": gaze_x,
                     "gaze_y": gaze_y,
                     "worn": worn,
+                    "eeg_concentration_score": (
+                        None if latest_eeg is None else round(latest_eeg.concentration_score, 3)
+                    ),
+                    "eeg_alpha_theta_ratio": (
+                        None if latest_eeg is None else round(latest_eeg.alpha_theta_ratio, 6)
+                    ),
+                    "eeg_status": eeg_status,
                 }
                 with _snapshot_lock:
                     _snapshot.update(tick)
@@ -229,6 +302,17 @@ def _run_acquisition(cfg: StartRequest) -> None:
                 device.close()  # type: ignore[union-attr]
             except Exception:
                 pass
+        if eeg_runner is not None:
+            try:
+                eeg_runner.stop()
+            except Exception:
+                pass
+        eeg_status = "stopped"
+        with _snapshot_lock:
+            _snapshot.update({"eeg_status": eeg_status})
+        if eeg_thread is not None and eeg_thread.is_alive():
+            eeg_thread.join(timeout=2.0)
+        _broadcast({"type": "log", "msg": "EEG attention stream stopped."})
 
     def in_window(ts: float, start: float, end: float) -> bool:
         return start <= ts <= end
@@ -319,6 +403,41 @@ def _run_acquisition(cfg: StartRequest) -> None:
     else:
         session_score = 0.0
 
+    eeg_concentration_score: Optional[float] = None
+    eeg_alpha_theta_ratio: Optional[float] = None
+    reason_eeg: Optional[str] = None
+    retake_recommended = False
+    if latest_eeg is not None:
+        eeg_concentration_score = float(latest_eeg.concentration_score)
+        eeg_alpha_theta_ratio = float(latest_eeg.alpha_theta_ratio)
+        eeg_norm = _clamp(eeg_concentration_score / 100.0, 0.0, 1.0)
+        gaze_norm = _clamp((attentiveness_score or 0.0) / 100.0, 0.0, 1.0)
+        focus_match = eeg_norm * gaze_norm
+        focus_mismatch = eeg_norm * (1.0 - gaze_norm)
+
+        direction_components = []
+        if pupil_response_score is not None:
+            direction_components.append(_clamp((pupil_response_score - 50.0) / 50.0, -1.0, 1.0))
+        if recovery_score is not None:
+            direction_components.append(_clamp((recovery_score - 50.0) / 50.0, -1.0, 1.0))
+        direction_signal = statistics.fmean(direction_components) if direction_components else 0.0
+
+        boost = max(0.0, direction_signal) * (0.12 + 0.28 * focus_match)
+        penalty = max(0.0, -direction_signal) * (0.12 + 0.28 * focus_match) + 0.36 * focus_mismatch
+        adjustment_factor = _clamp(1.0 + boost - penalty, 0.6, 1.35)
+        session_score = 100.0 * _clamp((session_score / 100.0) * adjustment_factor, 0.0, 1.0)
+
+        if focus_mismatch > 0.45:
+            retake_recommended = True
+            reason_eeg = (
+                "EEG attention was high while gaze was weakly aligned to the target, "
+                "so the score was reduced and a lenient retake is recommended."
+            )
+        else:
+            reason_eeg = "EEG and gaze were reasonably aligned; EEG provided a modest directional adjustment."
+    elif eeg_error is not None:
+        reason_eeg = f"EEG not used for this run: {eeg_error}"
+
     stored = append_engagement_record(
         {
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
@@ -326,11 +445,12 @@ def _run_acquisition(cfg: StartRequest) -> None:
             "pupil_response_score": None if pupil_response_score is None else round(pupil_response_score, 3),
             "recovery_score": None if recovery_score is None else round(recovery_score, 3),
             "attentiveness_score": None if attentiveness_score is None else round(attentiveness_score, 3),
+            "eeg_concentration_score": None if eeg_concentration_score is None else round(eeg_concentration_score, 3),
+            "eeg_alpha_theta_ratio": None if eeg_alpha_theta_ratio is None else round(eeg_alpha_theta_ratio, 6),
             "gaze_jitter_rms": None if gaze_jitter_rms is None else round(gaze_jitter_rms, 6),
             "weights": {"pupil_response": 0.65, "recovery": 0.25, "attentiveness": 0.10},
             "notes": (
-                "EEG/BCI component pending integration for anomaly rejection and additional biomarkers. "
-                "Current score combines pupil dynamics and low-weight gaze stability proxy."
+                "Current score combines pupil dynamics, low-weight gaze stability proxy, and EEG attention direction."
             ),
         },
         alpha=0.3,
@@ -353,16 +473,20 @@ def _run_acquisition(cfg: StartRequest) -> None:
             "recovery_score": None if recovery_score is None else round(recovery_score, 3),
             "attentiveness_score": None if attentiveness_score is None else round(attentiveness_score, 3),
             "concentration_score": None if attentiveness_score is None else round(attentiveness_score, 3),
+            "eeg_concentration_score": None if eeg_concentration_score is None else round(eeg_concentration_score, 3),
+            "eeg_alpha_theta_ratio": None if eeg_alpha_theta_ratio is None else round(eeg_alpha_theta_ratio, 6),
             "gaze_jitter_rms": None if gaze_jitter_rms is None else round(gaze_jitter_rms, 6),
             "reason_response": response_reason,
             "reason_recovery": recovery_reason,
             "reason_attentiveness": attentiveness_reason,
             "reason_concentration": attentiveness_reason,
+            "reason_eeg": reason_eeg,
+            "retake_recommended": retake_recommended,
             "weights": {"pupil_response": 0.65, "recovery": 0.25, "attentiveness": 0.10},
             "scientific_notes": (
                 "This is a proxy engagement metric. It is not a clinical diagnosis. "
                 "Gaze stability can reflect relaxation as well as attentional state. "
-                "EEG/BCI is planned primarily for anomaly rejection and additional biomarkers."
+                "EEG is used as a directional modulator with lenient penalties for mismatch."
             ),
         },
     }
@@ -383,7 +507,16 @@ def root() -> FileResponse:
 def next_event() -> dict:
     subscriber = _subscribe()
     try:
-        return subscriber.get(timeout=120)
+        first = subscriber.get(timeout=120)
+        events = [first]
+        for _ in range(63):
+            try:
+                events.append(subscriber.get_nowait())
+            except queue.Empty:
+                break
+        if len(events) == 1:
+            return first
+        return {"type": "batch", "events": events}
     except queue.Empty:
         return {"type": "timeout"}
     finally:
@@ -422,7 +555,18 @@ def start(config: StartRequest) -> dict:
         with _snapshot_lock:
             _snapshot.clear()
             _snapshot.update(
-                {"phase": "starting", "elapsed": 0.0, "pupil": None, "samples": 0, "gaze_x": None, "gaze_y": None, "worn": None}
+                {
+                    "phase": "starting",
+                    "elapsed": 0.0,
+                    "pupil": None,
+                    "samples": 0,
+                    "gaze_x": None,
+                    "gaze_y": None,
+                    "worn": None,
+                    "eeg_concentration_score": None,
+                    "eeg_alpha_theta_ratio": None,
+                    "eeg_status": "starting",
+                }
             )
         _acquisition_thread = threading.Thread(target=_run_acquisition, args=(config,), daemon=True)
         _acquisition_thread.start()

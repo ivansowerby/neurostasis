@@ -456,20 +456,26 @@ h1 {
 }
 
 .summary-waterfall {
-  justify-items: start;
+  width: 100%;
+  grid-template-columns: 1fr;
+  align-items: start;
 }
 
 .summary-waterfall .metric {
-  width: fit-content;
-  min-width: 240px;
+  width: min(34rem, 100%);
+  min-width: min(240px, 100%);
+}
+
+.summary-waterfall .metric:nth-child(1) {
+  justify-self: start;
 }
 
 .summary-waterfall .metric:nth-child(2) {
-  margin-left: 1.35rem;
+  justify-self: center;
 }
 
 .summary-waterfall .metric:nth-child(3) {
-  margin-left: 2.7rem;
+  justify-self: end;
 }
 
 .metric {
@@ -526,6 +532,19 @@ h1 {
   border-color: rgba(80, 224, 184, 0.62);
   background: rgba(80, 224, 184, 0.13);
   color: #8ef0d3;
+}
+
+.retake-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 158, 143, 0.7);
+  background: rgba(255, 158, 143, 0.16);
+  color: #ffd1c8;
+  padding: 0.24rem 0.6rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .engagement-title {
@@ -757,12 +776,12 @@ body.phase-post .card {
   .summary-waterfall .metric {
     width: 100%;
     min-width: 0;
-    margin-left: 0;
+    justify-self: stretch;
   }
 
   .summary-waterfall .metric:nth-child(2),
   .summary-waterfall .metric:nth-child(3) {
-    margin-left: 0;
+    justify-self: stretch;
   }
 
   #results-panel .metric-list .metric,

@@ -6,12 +6,13 @@ readme = "README.md"
 authors = [
     { name = "Ivan Sowerby", email = "me@ivan.engineer" }
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "fastapi>=0.116.1",
-    "gpype>=2.1.2",
+    "gpype==3.0.9",
+    "gtec_licensing>=1.0.3",
     "pupil-labs-realtime-api>=1.7.3",
-    "pylsl>=1.18.1",
+    "pylsl==1.17.6",
     "uvicorn>=0.35.0",
 ]
 
@@ -21,3 +22,8 @@ neurostasis = "neurostasis:main"
 [build-system]
 requires = ["uv_build>=0.10.0,<0.11.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

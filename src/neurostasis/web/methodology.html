@@ -25,7 +25,7 @@
         <div class="panel-head">
           <div class="eyebrow">Neurostasis</div>
           <h1>Methodology and Scoring Transparency</h1>
-          <p class="lead">This page documents the current model. It is a research prototype and not a diagnostic or medical device output.</p>
+          <p class="lead">This is a simple summary of how score is calculated at home. It is supportive monitoring, not diagnosis.</p>
         </div>
 
         <div class="metric-list">
@@ -38,13 +38,15 @@
             <strong>\(\alpha = 0.3\)</strong>
           </article>
           <article class="metric metric-dim">
-            <span>EEG/BCI artifact and biomarker contribution</span>
-            <span>Pending integration</span>
+            <span>EEG contribution</span>
+            <span>Active (attention direction modulator)</span>
           </article>
         </div>
 
         <section class="graph-pane">
-          <h3>Implementation Equations</h3>
+          <h3>Simple Scoring View</h3>
+          <p class="lead">At home, the app uses three signals: pupil response to light, recovery after light, and alignment between gaze and EEG attention.</p>
+          <p class="lead">Pupil baseline and post-light windows:</p>
           <p class="lead">\[
           B=\mathrm{mean}(p(t)),\ t\in[t_{on}-t_{base},t_{on}],\quad
           P_{6}=\mathrm{mean}(p(t)),\ t\in[t_{off}+5,t_{off}+7],\quad
@@ -53,36 +55,25 @@
           <p class="lead">\[
           \mathrm{PIPR6}=B-P_{6},\quad \mathrm{PIPR30}=B-P_{30}
           \]</p>
-          <p class="lead">\[
-          S_{pupil}=100\cdot\mathrm{clip}\left(\frac{\max(0,B-L_{min})-0.2}{2.0},0,1\right)
-          \]</p>
-          <p class="lead">where \(L_{min}\) is the minimum valid pupil value during LIGHT ON.</p>
-          <p class="lead">\[
-          S_{recovery}=100\cdot\mathrm{clip}\left(\frac{\mathrm{PIPR30}}{1.2},0,1\right)
-          \]</p>
-          <p class="lead">\[
-          S_{gaze\_stability}=100\cdot\left(1-\mathrm{clip}\left(\frac{J_{rms}}{0.08},0,1\right)\right)
-          \]</p>
+          <p class="lead">Session score is a weighted combination:</p>
           <p class="lead">\[
           S_{session}=
           \frac{\sum_i w_i S_i}{\sum_i w_i}
-          \quad\text{for available components only, with}\quad
-          (w_{pupil},w_{recovery},w_{gaze})=(0.65,0.25,0.10)
+          ,\quad (w_{pupil},w_{recovery},w_{gaze})=(0.65,0.25,0.10)
           \]</p>
+          <p class="lead">EEG (\(\alpha/\theta\)-based attention score) then adjusts direction. If EEG attention is high but gaze is off-target, score is reduced and retake may be suggested.</p>
           <p class="lead">\[
           EMA_t=\alpha\cdot S_{session,t}+(1-\alpha)\cdot EMA_{t-1},\quad \alpha=0.3
           \]</p>
-          <p class="lead">Scores are bounded to \([0,100]\) before storage, so EMA remains bounded as a convex combination.</p>
-          <p class="lead">\(J_{rms}\) is RMS gaze jitter computed from frame-to-frame displacement after normalizing gaze coordinates to \([0,1]\times[0,1]\).</p>
+          <p class="lead">All scores are clipped to 0-100.</p>
         </section>
 
         <section class="graph-pane">
-          <h3>Interpretation Boundaries</h3>
-          <p class="lead">1. The gaze-stability term uses eye jitter only and is intentionally low-weight.</p>
-          <p class="lead">2. Lower jitter can indicate relaxation, steadier fixation, or attention; it is not a pure concentration measure.</p>
-          <p class="lead">3. EEG/BCI integration is planned primarily for artifact rejection and additional biomarkers, not only attention inference.</p>
-          <p class="lead">4. PIPR windows and score scaling are engineering heuristics for trend tracking in this prototype, not normative clinical thresholds.</p>
-          <p class="lead">5. Circadian engagement here is supportive telemetry and should not be used as a diagnostic output.</p>
+          <h3>What This Means</h3>
+          <p class="lead">1. Higher score means better modeled response for this protocol run.</p>
+          <p class="lead">2. Lower score can come from weak pupil response, weak recovery, unstable gaze, or EEG-gaze mismatch.</p>
+          <p class="lead">3. The system is intentionally lenient and can recommend retake when alignment is poor.</p>
+          <p class="lead">4. This is not a standalone diagnostic tool.</p>
         </section>
       </section>
     </main>

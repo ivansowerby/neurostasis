@@ -35,6 +35,10 @@ function fmtScore(value, decimals = 2) {
   return value == null ? "-" : `${Number(value).toFixed(decimals)}/100`;
 }
 
+function fmtRatio(value, decimals = 3) {
+  return value == null ? "-" : Number(value).toFixed(decimals);
+}
+
 function phaseLabelText(phase) {
   if (phase === "LIGHT_ON") return "Light On";
   if (phase === "POST_LIGHT") return "Post Light";
@@ -286,10 +290,21 @@ function updateEngagement(result) {
   $("e-recovery").textContent = fmtScore(engagement.recovery_score, 2);
   const stability = engagement.gaze_stability_score ?? engagement.attentiveness_score ?? engagement.concentration_score;
   $("e-gaze-stability").textContent = fmtScore(stability, 2);
+  $("e-eeg-concentration").textContent = fmtScore(engagement.eeg_concentration_score, 2);
+  $("e-eeg-ratio").textContent = fmtRatio(engagement.eeg_alpha_theta_ratio, 3);
+
+  const retakeRow = $("e-retake-row");
+  const retakeBadge = $("e-retake-badge");
+  const retake = Boolean(engagement.retake_recommended);
+  if (retakeRow && retakeBadge) {
+    retakeRow.classList.toggle("hidden", !retake);
+    retakeBadge.textContent = retake ? "Retake Recommended" : "OK";
+  }
 
   const reasons = [];
   if (engagement.reason_response) reasons.push(`Response: ${engagement.reason_response}`);
   if (engagement.reason_recovery) reasons.push(`Recovery: ${engagement.reason_recovery}`);
+  if (engagement.reason_eeg) reasons.push(`EEG: ${engagement.reason_eeg}`);
   const stabilityReason = engagement.reason_gaze_stability ?? engagement.reason_attentiveness ?? engagement.reason_concentration;
   if (stabilityReason) reasons.push(`Gaze stability proxy: ${stabilityReason}`);
   if (engagement.scientific_notes) reasons.push(engagement.scientific_notes);
@@ -333,6 +348,15 @@ function updateTick(event) {
   $("st-pupil").textContent = event.pupil == null ? "-" : Number(event.pupil).toFixed(3);
   $("st-samples").textContent = event.samples;
   setPhase(event.phase);
+  if (event.eeg_concentration_score != null || event.eeg_status != null) {
+    const eegScore =
+      event.eeg_concentration_score == null ? "-" : `${Number(event.eeg_concentration_score).toFixed(2)}/100`;
+    const eegRatio =
+      event.eeg_alpha_theta_ratio == null ? "-" : Number(event.eeg_alpha_theta_ratio).toFixed(3);
+    console.log(
+      `[EEG/TICK] t=${Number(event.elapsed).toFixed(2)}s status=${event.eeg_status || "unknown"} score=${eegScore} ratio=${eegRatio}`
+    );
+  }
 
   const pct = Math.min(100, (Number(event.elapsed) / totalDuration) * 100);
   progressBar.style.width = `${pct}%`;
@@ -357,47 +381,59 @@ async function waitForEvents() {
   let done = false;
   let connected = false;
 
+  const handleEvent = (event) => {
+    if (event.type === "timeout") {
+      return;
+    }
+
+    if (event.type === "log") {
+      log(event.msg);
+    } else if (event.type === "phase") {
+      if (!connected) {
+        connected = true;
+        stopPreconnectCamera();
+      }
+      setPhase(event.phase);
+    } else if (event.type === "gaze") {
+      if (!connected) {
+        connected = true;
+        stopPreconnectCamera();
+      }
+      if (event.worn === false) {
+        hideGazeCursor();
+      } else {
+        updateGazeCursor(event.gaze_x, event.gaze_y);
+      }
+    } else if (event.type === "tick") {
+      if (!connected) {
+        connected = true;
+        stopPreconnectCamera();
+      }
+      updateTick(event);
+    } else if (event.type === "done") {
+      if (!connected) {
+        connected = true;
+        stopPreconnectCamera();
+      }
+      progressBar.style.width = "100%";
+      setTimeout(() => showResults(event.results), 350);
+      done = true;
+    }
+  };
+
   while (!done) {
     try {
       const resp = await fetch("/next-event");
       const event = await resp.json();
-
-      if (event.type === "timeout") {
-        continue;
-      }
-
-      if (event.type === "log") {
-        log(event.msg);
-      } else if (event.type === "phase") {
-        if (!connected) {
-          connected = true;
-          stopPreconnectCamera();
+      if (event.type === "batch" && Array.isArray(event.events)) {
+        for (const inner of event.events) {
+          handleEvent(inner);
+          if (done) {
+            break;
+          }
         }
-        setPhase(event.phase);
-      } else if (event.type === "gaze") {
-        if (!connected) {
-          connected = true;
-          stopPreconnectCamera();
-        }
-        if (event.worn === false) {
-          hideGazeCursor();
-        } else {
-          updateGazeCursor(event.gaze_x, event.gaze_y);
-        }
-      } else if (event.type === "tick") {
-        if (!connected) {
-          connected = true;
-          stopPreconnectCamera();
-        }
-        updateTick(event);
-      } else if (event.type === "done") {
-        if (!connected) {
-          connected = true;
-          stopPreconnectCamera();
-        }
-        progressBar.style.width = "100%";
-        setTimeout(() => showResults(event.results), 350);
-        done = true;
+      } else {
+        handleEvent(event);
       }
     } catch (error) {
       log(`Event fetch error: ${error}. Retrying...`);
