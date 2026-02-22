@@ -11,6 +11,7 @@ const views = {
 const phaseLabel = $("phase-label");
 const stimulus = $("stimulus");
 const gazeCursor = $("gaze-cursor");
+const preconnectVideo = $("preconnect-video");
 const progressBar = $("progress-bar");
 const logEl = $("log");
 const graphCanvas = $("pupil-graph");
@@ -18,6 +19,9 @@ const metricReasons = $("metric-reasons");
 const engagementReasons = $("engagement-reasons");
 const gazeBounds = { minX: 0, maxX: 1280, minY: 0, maxY: 720 };
 const graphPoints = [];
+let lastGraphPlot = [];
+let graphTooltip = null;
+let preconnectStream = null;
 
 function log(msg) {
   logEl.textContent = msg;
@@ -31,17 +35,22 @@ function fmtScore(value, decimals = 2) {
   return value == null ? "-" : `${Number(value).toFixed(decimals)}/100`;
 }
 
+function phaseLabelText(phase) {
+  if (phase === "LIGHT_ON") return "Light On";
+  if (phase === "POST_LIGHT") return "Post Light";
+  if (phase === "BASELINE") return "Baseline";
+  return phase;
+}
+
 function setPhase(phase) {
-  phaseLabel.textContent = phase;
+  phaseLabel.textContent = phaseLabelText(phase);
   document.body.classList.remove("phase-light", "phase-post");
   stimulus.classList.remove("active", "post");
 
   if (phase === "LIGHT_ON") {
-    phaseLabel.textContent = "LIGHT ON";
     document.body.classList.add("phase-light");
     stimulus.classList.add("active");
   } else if (phase === "POST_LIGHT") {
-    phaseLabel.textContent = "POST_LIGHT";
     document.body.classList.add("phase-post");
     stimulus.classList.add("post");
   }
@@ -52,6 +61,35 @@ function setPhase(phase) {
 
 function hideGazeCursor() {
   gazeCursor.classList.add("hidden");
+}
+
+async function startPreconnectCamera() {
+  if (!preconnectVideo) return;
+  try {
+    preconnectStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user" },
+      audio: false,
+    });
+    preconnectVideo.srcObject = preconnectStream;
+    preconnectVideo.classList.remove("hidden");
+    log("Align your face in the center while connecting...");
+  } catch {
+    preconnectVideo.classList.add("hidden");
+    log("Camera preview unavailable. Continuing connection.");
+  }
+}
+
+function stopPreconnectCamera() {
+  if (preconnectStream) {
+    for (const track of preconnectStream.getTracks()) {
+      track.stop();
+    }
+    preconnectStream = null;
+  }
+  if (preconnectVideo) {
+    preconnectVideo.srcObject = null;
+    preconnectVideo.classList.add("hidden");
+  }
 }
 
 function getPhaseColor(phase) {
@@ -94,22 +132,75 @@ function drawGraph() {
   const plotW = cssWidth - xPad * 2;
   const plotH = cssHeight - yPad * 2;
 
-  for (let i = 1; i < graphPoints.length; i += 1) {
-    const a = graphPoints[i - 1];
-    const b = graphPoints[i];
-    if (a.pupil == null || b.pupil == null) continue;
-    const ax = xPad + (a.t / maxT) * plotW;
-    const bx = xPad + (b.t / maxT) * plotW;
-    const ay = yPad + (1 - (a.pupil - minP) / spanP) * plotH;
-    const by = yPad + (1 - (b.pupil - minP) / spanP) * plotH;
+  const rendered = [];
+  for (let i = 0; i < graphPoints.length; i += 1) {
+    const p = graphPoints[i];
+    if (p.pupil == null) continue;
+    const x = xPad + (p.t / maxT) * plotW;
+    const y = yPad + (1 - (p.pupil - minP) / spanP) * plotH;
+    const phase = p.phase || "BASELINE";
+    rendered.push({ x, y, t: p.t, pupil: p.pupil, phase });
+  }
 
+  lastGraphPlot = rendered;
+  if (rendered.length < 2) return;
+
+  ctx.lineWidth = 2;
+  for (let i = 1; i < rendered.length; i += 1) {
+    const a = rendered[i - 1];
+    const b = rendered[i];
     ctx.strokeStyle = getPhaseColor(b.phase);
-    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(ax, ay);
-    ctx.lineTo(bx, by);
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
     ctx.stroke();
   }
+}
+
+function ensureGraphTooltip() {
+  if (graphTooltip) return graphTooltip;
+  graphTooltip = document.createElement("div");
+  graphTooltip.className = "canvas-tooltip hidden";
+  document.body.appendChild(graphTooltip);
+  return graphTooltip;
+}
+
+function showGraphTooltip(clientX, clientY, text) {
+  const tip = ensureGraphTooltip();
+  tip.textContent = text;
+  tip.classList.remove("hidden");
+  tip.style.left = `${clientX + 12}px`;
+  tip.style.top = `${clientY + 12}px`;
+}
+
+function hideGraphTooltip() {
+  if (!graphTooltip) return;
+  graphTooltip.classList.add("hidden");
+}
+
+function onResultGraphMove(ev) {
+  if (!graphCanvas || views.results.classList.contains("hidden") || lastGraphPlot.length === 0) {
+    hideGraphTooltip();
+    return;
+  }
+  const rect = graphCanvas.getBoundingClientRect();
+  const x = ev.clientX - rect.left;
+  const y = ev.clientY - rect.top;
+  let best = null;
+  let bestD = Infinity;
+  for (const p of lastGraphPlot) {
+    const d = Math.hypot(p.x - x, p.y - y);
+    if (d < bestD) {
+      bestD = d;
+      best = p;
+    }
+  }
+  if (!best || bestD > 28) {
+    hideGraphTooltip();
+    return;
+  }
+  const text = `${phaseLabelText(best.phase)} | ${Number(best.t).toFixed(1)}s | ${Number(best.pupil).toFixed(3)} mm`;
+  showGraphTooltip(ev.clientX, ev.clientY, text);
 }
 
 function clamp(value, min, max) {
@@ -264,6 +355,7 @@ function updateTick(event) {
 
 async function waitForEvents() {
   let done = false;
+  let connected = false;
 
   while (!done) {
     try {
@@ -277,16 +369,32 @@ async function waitForEvents() {
       if (event.type === "log") {
         log(event.msg);
       } else if (event.type === "phase") {
+        if (!connected) {
+          connected = true;
+          stopPreconnectCamera();
+        }
         setPhase(event.phase);
       } else if (event.type === "gaze") {
+        if (!connected) {
+          connected = true;
+          stopPreconnectCamera();
+        }
         if (event.worn === false) {
           hideGazeCursor();
         } else {
           updateGazeCursor(event.gaze_x, event.gaze_y);
         }
       } else if (event.type === "tick") {
+        if (!connected) {
+          connected = true;
+          stopPreconnectCamera();
+        }
         updateTick(event);
       } else if (event.type === "done") {
+        if (!connected) {
+          connected = true;
+          stopPreconnectCamera();
+        }
         progressBar.style.width = "100%";
         setTimeout(() => showResults(event.results), 350);
         done = true;
@@ -314,6 +422,7 @@ async function startSession() {
   progressBar.style.width = "0%";
   hideGazeCursor();
   graphPoints.length = 0;
+  await startPreconnectCamera();
 
   try {
     const resp = await fetch("/start", {
@@ -330,6 +439,7 @@ async function startSession() {
     log("Connecting to tracker...");
     await waitForEvents();
   } catch (error) {
+    stopPreconnectCamera();
     log(String(error));
     toggleView("start");
   }
@@ -338,3 +448,5 @@ async function startSession() {
 $("start-btn").addEventListener("click", startSession);
 $("restart-btn").addEventListener("click", () => window.location.reload());
 window.addEventListener("resize", drawGraph);
+graphCanvas?.addEventListener("mousemove", onResultGraphMove);
+graphCanvas?.addEventListener("mouseleave", hideGraphTooltip);

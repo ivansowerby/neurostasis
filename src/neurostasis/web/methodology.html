@@ -16,8 +16,8 @@
     <script defer src="/static/neural-bg.js"></script>
     <main class="shell">
       <nav class="top-tabs" aria-label="Product sections">
-        <a class="tab-link" href="/">Pupil Session</a>
-        <a class="tab-link" href="/engagement">Engagement Trends</a>
+        <a class="tab-link" href="/">Test</a>
+        <a class="tab-link" href="/engagement">Engagement</a>
         <a class="tab-link active" href="/methodology">Methodology</a>
       </nav>
 
@@ -44,27 +44,45 @@
         </div>
 
         <section class="graph-pane">
-          <h3>Current Equations</h3>
+          <h3>Implementation Equations</h3>
           <p class="lead">\[
-          S_{session} = 0.65 \cdot S_{pupil} + 0.25 \cdot S_{recovery} + 0.10 \cdot S_{attentiveness}
+          B=\mathrm{mean}(p(t)),\ t\in[t_{on}-t_{base},t_{on}],\quad
+          P_{6}=\mathrm{mean}(p(t)),\ t\in[t_{off}+5,t_{off}+7],\quad
+          P_{30}=\mathrm{mean}(p(t)),\ t\in[t_{off}+25,t_{off}+35]
           \]</p>
           <p class="lead">\[
-          EMA_t = \alpha \cdot S_{session,t} + (1-\alpha)\cdot EMA_{t-1}
-          \quad\text{with}\quad \alpha = 0.3
+          \mathrm{PIPR6}=B-P_{6},\quad \mathrm{PIPR30}=B-P_{30}
           \]</p>
-          <p class="lead">Since this is a convex combination, EMA remains within the score range when inputs are bounded. We also clamp stored values to \([0,100]\).</p>
           <p class="lead">\[
-          S_{attentiveness} = 100 \cdot \left(1 - \mathrm{clip}\left(\frac{J_{rms}}{0.08},0,1\right)\right)
+          S_{pupil}=100\cdot\mathrm{clip}\left(\frac{\max(0,B-L_{min})-0.2}{2.0},0,1\right)
           \]</p>
-          <p class="lead">where \(J_{rms}\) is RMS gaze jitter computed from frame-to-frame gaze displacement.</p>
+          <p class="lead">where \(L_{min}\) is the minimum valid pupil value during LIGHT ON.</p>
+          <p class="lead">\[
+          S_{recovery}=100\cdot\mathrm{clip}\left(\frac{\mathrm{PIPR30}}{1.2},0,1\right)
+          \]</p>
+          <p class="lead">\[
+          S_{gaze\_stability}=100\cdot\left(1-\mathrm{clip}\left(\frac{J_{rms}}{0.08},0,1\right)\right)
+          \]</p>
+          <p class="lead">\[
+          S_{session}=
+          \frac{\sum_i w_i S_i}{\sum_i w_i}
+          \quad\text{for available components only, with}\quad
+          (w_{pupil},w_{recovery},w_{gaze})=(0.65,0.25,0.10)
+          \]</p>
+          <p class="lead">\[
+          EMA_t=\alpha\cdot S_{session,t}+(1-\alpha)\cdot EMA_{t-1},\quad \alpha=0.3
+          \]</p>
+          <p class="lead">Scores are bounded to \([0,100]\) before storage, so EMA remains bounded as a convex combination.</p>
+          <p class="lead">\(J_{rms}\) is RMS gaze jitter computed from frame-to-frame displacement after normalizing gaze coordinates to \([0,1]\times[0,1]\).</p>
         </section>
 
         <section class="graph-pane">
           <h3>Interpretation Boundaries</h3>
-          <p class="lead">1. The attentiveness term currently uses eye jitter only and is intentionally low-weight.</p>
+          <p class="lead">1. The gaze-stability term uses eye jitter only and is intentionally low-weight.</p>
           <p class="lead">2. Lower jitter can indicate relaxation, steadier fixation, or attention; it is not a pure concentration measure.</p>
           <p class="lead">3. EEG/BCI integration is planned primarily for artifact rejection and additional biomarkers, not only attention inference.</p>
-          <p class="lead">4. Circadian engagement is modeled from pupil response dynamics and should be interpreted as supportive telemetry, not diagnosis.</p>
+          <p class="lead">4. PIPR windows and score scaling are engineering heuristics for trend tracking in this prototype, not normative clinical thresholds.</p>
+          <p class="lead">5. Circadian engagement here is supportive telemetry and should not be used as a diagnostic output.</p>
         </section>
       </section>
     </main>

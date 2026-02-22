@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,opsz,wght@0,18..144,300..900;1,18..144,300..900&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
+
 :root {
   --bg: #111319;
   --panel: #191d26;
@@ -49,7 +51,7 @@ body {
   color: var(--muted);
   border-radius: 8px;
   padding: 0.4rem 0.7rem;
-  font-size: 0.83rem;
+  font-size: 1rem;
   font-weight: 600;
 }
 
@@ -116,10 +118,14 @@ body.run-active .shell {
 }
 
 .eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 0.72rem;
-  color: var(--muted);
+  margin: 0 1rem 0.5rem 1rem;
+  font-size: 4rem;
+  letter-spacing: 0.2rem;
+  color: var(--accent);
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: bold;
+  font-style: normal;
 }
 
 h1,
@@ -130,7 +136,10 @@ h3 {
 }
 
 h1 {
+  margin: 0 1rem 1.5rem 1rem;
+  width: 100%;
   font-size: clamp(1.4rem, 2.4vw, 2rem);
+  text-decoration: underline;
 }
 
 .lead {
@@ -350,6 +359,19 @@ h1 {
   transition: background 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
 }
 
+.preconnect-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+  transform-origin: center;
+  opacity: 1;
+  filter: none;
+  z-index: 1;
+}
+
 .stimulus.active {
   background: #ffffff;
   border-color: #f7f7f7;
@@ -375,7 +397,7 @@ h1 {
   backdrop-filter: blur(3px);
   transition: transform 90ms linear, opacity 130ms ease;
   pointer-events: none;
-  z-index: 2;
+  z-index: 3;
 }
 
 .runtime-pane {
@@ -433,6 +455,23 @@ h1 {
   gap: 0.45rem;
 }
 
+.summary-waterfall {
+  justify-items: start;
+}
+
+.summary-waterfall .metric {
+  width: fit-content;
+  min-width: 240px;
+}
+
+.summary-waterfall .metric:nth-child(2) {
+  margin-left: 1.35rem;
+}
+
+.summary-waterfall .metric:nth-child(3) {
+  margin-left: 2.7rem;
+}
+
 .metric {
   border: 1px solid var(--line);
   border-radius: 9px;
@@ -456,6 +495,37 @@ h1 {
 .metric-dim {
   color: var(--muted);
   font-size: 0.88rem;
+}
+
+.trend-row-scores {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.score-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 0.26rem 0.56rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-session {
+  border-color: rgba(255, 191, 47, 0.65);
+  background: rgba(255, 191, 47, 0.13);
+  color: #ffd875;
+}
+
+.score-ema {
+  border-color: rgba(80, 224, 184, 0.62);
+  background: rgba(80, 224, 184, 0.13);
+  color: #8ef0d3;
 }
 
 .engagement-title {
@@ -500,6 +570,21 @@ h1 {
   background: #0d1118;
 }
 
+.canvas-tooltip {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  border-radius: 8px;
+  border: 1px solid #495670;
+  background: rgba(11, 16, 24, 0.96);
+  color: var(--ink);
+  padding: 0.34rem 0.5rem;
+  font-size: 0.76rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+}
+
 .graph-legend {
   margin-top: 0.45rem;
   display: flex;
@@ -540,13 +625,19 @@ h1 {
 }
 
 .log {
-  width: min(1140px, calc(100vw - 2rem));
-  margin: 0 auto 0.8rem;
+  position: sticky;
+  left: 1rem;
+  bottom: 1rem;
+  width: fit-content;
+  margin: 1rem;
+  padding: 4px;
   font-size: 0.82rem;
-  color: var(--muted);
+  color: #ffffff;
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
+  background-color: var(--panel);
+  border-radius: 5px;
 }
 
 body.phase-light {
@@ -601,7 +692,8 @@ body.phase-light .field input {
 }
 
 body.phase-light #pupil-graph,
-body.phase-light #engagement-graph {
+body.phase-light #engagement-graph,
+body.phase-light .log {
   background: #ffffff;
 }
 
@@ -658,5 +750,24 @@ body.phase-post .card {
 
   .stimulus {
     width: min(420px, 82vw);
+  }
+}
+
+@media (max-width: 760px) {
+  .summary-waterfall .metric {
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+  }
+
+  .summary-waterfall .metric:nth-child(2),
+  .summary-waterfall .metric:nth-child(3) {
+    margin-left: 0;
+  }
+
+  #results-panel .metric-list .metric,
+  #engagement-list .metric {
+    width: 100%;
+    min-width: 0;
   }
 }
