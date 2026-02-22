@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Neurostasis Methodology</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script>
+      window.MathJax = {
+        tex: { inlineMath: [["\\(", "\\)"], ["$", "$"]] },
+      };
+    </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  </head>
+  <body>
+    <script defer src="/static/neural-bg.js"></script>
+    <main class="shell">
+      <nav class="top-tabs" aria-label="Product sections">
+        <a class="tab-link" href="/">Pupil Session</a>
+        <a class="tab-link" href="/engagement">Engagement Trends</a>
+        <a class="tab-link active" href="/methodology">Methodology</a>
+      </nav>
+
+      <section class="panel card">
+        <div class="panel-head">
+          <div class="eyebrow">Neurostasis</div>
+          <h1>Methodology and Scoring Transparency</h1>
+          <p class="lead">This page documents the current model. It is a research prototype and not a diagnostic or medical device output.</p>
+        </div>
+
+        <div class="metric-list">
+          <article class="metric">
+            <span>Score range</span>
+            <strong>0 to 100</strong>
+          </article>
+          <article class="metric">
+            <span>EMA smoothing</span>
+            <strong>\(\alpha = 0.3\)</strong>
+          </article>
+          <article class="metric metric-dim">
+            <span>EEG/BCI artifact and biomarker contribution</span>
+            <span>Pending integration</span>
+          </article>
+        </div>
+
+        <section class="graph-pane">
+          <h3>Current Equations</h3>
+          <p class="lead">\[
+          S_{session} = 0.65 \cdot S_{pupil} + 0.25 \cdot S_{recovery} + 0.10 \cdot S_{attentiveness}
+          \]</p>
+          <p class="lead">\[
+          EMA_t = \alpha \cdot S_{session,t} + (1-\alpha)\cdot EMA_{t-1}
+          \quad\text{with}\quad \alpha = 0.3
+          \]</p>
+          <p class="lead">Since this is a convex combination, EMA remains within the score range when inputs are bounded. We also clamp stored values to \([0,100]\).</p>
+          <p class="lead">\[
+          S_{attentiveness} = 100 \cdot \left(1 - \mathrm{clip}\left(\frac{J_{rms}}{0.08},0,1\right)\right)
+          \]</p>
+          <p class="lead">where \(J_{rms}\) is RMS gaze jitter computed from frame-to-frame gaze displacement.</p>
+        </section>
+
+        <section class="graph-pane">
+          <h3>Interpretation Boundaries</h3>
+          <p class="lead">1. The attentiveness term currently uses eye jitter only and is intentionally low-weight.</p>
+          <p class="lead">2. Lower jitter can indicate relaxation, steadier fixation, or attention; it is not a pure concentration measure.</p>
+          <p class="lead">3. EEG/BCI integration is planned primarily for artifact rejection and additional biomarkers, not only attention inference.</p>
+          <p class="lead">4. Circadian engagement is modeled from pupil response dynamics and should be interpreted as supportive telemetry, not diagnosis.</p>
+        </section>
+      </section>
+    </main>
+    <footer id="log" class="log">Methodology is transparent and versioned in code.</footer>
+  </body>
+</html>

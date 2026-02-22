@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Neurostasis PIPR</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <script defer src="/static/neural-bg.js"></script>
+    <main class="shell">
+      <nav class="top-tabs" aria-label="Product sections">
+        <a class="tab-link active" href="/">Pupil Session</a>
+        <a class="tab-link" href="/engagement">Engagement Trends</a>
+        <a class="tab-link" href="/methodology">Methodology</a>
+      </nav>
+
+      <section id="start-panel" class="panel card card-enter">
+        <div class="panel-head">
+          <div class="eyebrow">Neurostasis</div>
+          <h1>PIPR Session Setup</h1>
+          <p class="lead">Circadian-alignment session for dementia-support workflows using pupil response today and EEG integration next.</p>
+        </div>
+
+        <div class="start-layout">
+          <div class="controls-grid">
+            <label class="field">
+              <span class="term-line"><span class="term">Light ON time (s from start)</span><span class="help-tip" data-tip="Timestamp from session start when bright stimulus begins.">?</span></span>
+              <input id="t_on" type="number" value="15" min="1" step="1" />
+            </label>
+
+            <label class="field">
+              <span class="term-line"><span class="term">Light OFF time (s from start)</span><span class="help-tip" data-tip="Timestamp from session start when bright stimulus ends and post-light recovery begins.">?</span></span>
+              <input id="t_off" type="number" value="25" min="2" step="1" />
+            </label>
+
+            <label class="field">
+              <span class="term-line"><span class="term">Total Duration (seconds)</span><span class="help-tip" data-tip="Full protocol length covering baseline, light stimulation, and sustained recovery windows.">?</span></span>
+              <input id="total_s" type="number" value="60" min="10" step="5" />
+            </label>
+
+            <label class="field">
+              <span class="term-line"><span class="term">Baseline Window (seconds)</span><span class="help-tip" data-tip="Pre-light reference period used as the comparator for PIPR and engagement metrics.">?</span></span>
+              <input id="baseline_s" type="number" value="10" min="1" step="1" />
+            </label>
+
+            <label class="field">
+              <span class="term-line"><span class="term">Device Retries</span><span class="help-tip" data-tip="Maximum reconnect attempts before fallback so sessions can still proceed in demo mode.">?</span></span>
+              <input id="retries" type="number" value="5" min="1" step="1" />
+            </label>
+          </div>
+
+          <aside class="protocol-pane">
+            <h2>Phase Flow</h2>
+            <ol class="phase-list">
+              <li><strong>BASELINE</strong><span>Natural pupil state measured before light.</span></li>
+              <li><strong>LIGHT ON</strong><span>High-intensity white stimulus is applied.</span></li>
+              <li><strong>POST LIGHT</strong><span>Recovery period used for PIPR calculations.</span></li>
+            </ol>
+          </aside>
+        </div>
+
+        <label class="toggle-row" for="demo-chk">
+          <input id="demo-chk" type="checkbox" />
+          <span>Demo mode (simulated pupil)</span>
+        </label>
+        <div class="start-actions">
+          <button id="start-btn" class="btn btn-primary" type="button">Start Session</button>
+        </div>
+      </section>
+
+      <section id="run-panel" class="panel card hidden" aria-live="polite">
+        <div class="run-stack">
+          <div class="phase-chip" id="phase-label">BASELINE</div>
+
+          <div class="stimulus-area">
+            <div id="stimulus" class="stimulus">
+              <div id="gaze-cursor" class="gaze-cursor hidden"></div>
+            </div>
+          </div>
+
+          <aside class="runtime-pane">
+            <div class="stat-grid">
+              <article class="stat">
+                <span class="stat-key">Elapsed</span>
+                <span class="stat-value"><span id="st-elapsed">0.00</span> s</span>
+              </article>
+              <article class="stat">
+                <span class="stat-key">Pupil</span>
+                <span class="stat-value"><span id="st-pupil">-</span> mm</span>
+              </article>
+              <article class="stat">
+                <span class="stat-key">Samples</span>
+                <span class="stat-value" id="st-samples">0</span>
+              </article>
+            </div>
+
+            <div class="progress-wrap" aria-hidden="true">
+              <div id="progress-bar" class="progress-bar"></div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="results-panel" class="panel card hidden">
+        <div class="eyebrow">Session Complete</div>
+        <h2>PIPR Results</h2>
+
+        <div class="metric-list">
+          <article class="metric">
+            <div class="metric-label">
+              <span class="term-line"><span class="term">Baseline pupil (mean)</span><span class="help-tip" data-tip="Average pupil diameter measured during baseline window.">?</span></span>
+            </div>
+            <strong id="r-baseline">-</strong>
+          </article>
+
+          <article class="metric">
+            <div class="metric-label">
+              <span class="term-line"><span class="term">PIPR6 (5-7s post-light)</span><span class="help-tip" data-tip="Baseline minus mean pupil diameter 5 to 7 seconds after light offset.">?</span></span>
+            </div>
+            <strong id="r-pipr6">-</strong>
+          </article>
+
+          <article class="metric">
+            <div class="metric-label">
+              <span class="term-line"><span class="term">PIPR30 (25-35s post-light)</span><span class="help-tip" data-tip="Baseline minus mean pupil diameter 25 to 35 seconds after light offset.">?</span></span>
+            </div>
+            <strong id="r-pipr30">-</strong>
+          </article>
+
+          <article class="metric metric-dim">
+            <span>Baseline samples</span>
+            <span id="r-n-base">-</span>
+          </article>
+          <article class="metric metric-dim">
+            <span>PIPR6 samples</span>
+            <span id="r-n-pipr6">-</span>
+          </article>
+          <article class="metric metric-dim">
+            <span>PIPR30 samples</span>
+            <span id="r-n-pipr30">-</span>
+          </article>
+        </div>
+
+        <div id="metric-reasons" class="metric-reasons hidden"></div>
+
+        <h3 class="engagement-title">Circadian Engagement Scores</h3>
+        <p class="lead score-scale">Reference scale: <strong>0 to 100</strong>, where higher indicates stronger modeled engagement for this protocol.</p>
+        <div class="metric-list">
+          <article class="metric">
+            <div class="metric-label">
+              <span class="term-line"><span class="term">Session Engagement Score</span><span class="help-tip" data-tip="Weighted composite: pupil response + post-light recovery + low-weight gaze stability proxy from jitter.">?</span></span>
+            </div>
+            <strong id="e-session">-</strong>
+          </article>
+          <article class="metric">
+            <div class="metric-label">
+              <span class="term-line"><span class="term">EMA Engagement Trend</span><span class="help-tip" data-tip="Exponential moving average across sessions, biased toward recent behavior improvement.">?</span></span>
+            </div>
+            <strong id="e-ema">-</strong>
+          </article>
+          <article class="metric metric-dim">
+            <span>Pupil response component</span>
+            <span id="e-response">-</span>
+          </article>
+          <article class="metric metric-dim">
+            <span>Recovery component</span>
+            <span id="e-recovery">-</span>
+          </article>
+          <article class="metric metric-dim">
+            <span>Gaze stability proxy (low weight)</span>
+            <span id="e-gaze-stability">-</span>
+          </article>
+          <article class="metric metric-dim">
+            <span>EEG/BCI anomaly + biomarker component</span>
+            <span>Pending integration</span>
+          </article>
+        </div>
+        <div id="engagement-reasons" class="metric-reasons hidden"></div>
+
+        <section class="graph-pane result-graph">
+          <h3>Pupil Size Over Time</h3>
+          <canvas id="pupil-graph" aria-label="Pupil graph" role="img"></canvas>
+          <div class="graph-legend">
+            <span class="lg lg-base">Baseline</span>
+            <span class="lg lg-light">Light On</span>
+            <span class="lg lg-post">Post Light</span>
+          </div>
+        </section>
+
+        <button id="restart-btn" class="btn btn-muted" type="button">Run New Session</button>
+      </section>
+    </main>
+
+    <footer id="log" class="log">Ready.</footer>
+    <script defer src="/static/app.js"></script>
+  </body>
+</html>

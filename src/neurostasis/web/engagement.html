@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Neurostasis Engagement</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <script defer src="/static/neural-bg.js"></script>
+    <main class="shell">
+      <nav class="top-tabs" aria-label="Product sections">
+        <a class="tab-link" href="/">Pupil Session</a>
+        <a class="tab-link active" href="/engagement">Engagement Trends</a>
+        <a class="tab-link" href="/methodology">Methodology</a>
+      </nav>
+
+      <section class="panel card">
+        <div class="panel-head">
+          <div class="eyebrow">Neurostasis</div>
+          <h1>Circadian Engagement Trends</h1>
+          <p class="lead">Longitudinal EMA emphasizes recent positive sessions while preserving prior performance context.</p>
+          <p class="lead score-scale">All scores are presented on a <strong>0 to 100</strong> scale.</p>
+        </div>
+
+        <div class="metric-list">
+          <article class="metric">
+            <span>Latest session score</span>
+            <strong id="latest-session">-</strong>
+          </article>
+          <article class="metric">
+            <span>Latest EMA score</span>
+            <strong id="latest-ema">-</strong>
+          </article>
+          <article class="metric metric-dim">
+            <span>Stored sessions</span>
+            <span id="history-count">0</span>
+          </article>
+        </div>
+
+        <section class="graph-pane">
+          <h3>Session vs EMA</h3>
+          <canvas id="engagement-graph" aria-label="Engagement trend graph" role="img"></canvas>
+        </section>
+
+        <div id="engagement-list" class="metric-list"></div>
+      </section>
+    </main>
+    <footer id="log" class="log">Ready.</footer>
+    <script defer src="/static/engagement.js"></script>
+  </body>
+</html>
