@@ -131,4 +131,10 @@ s2_eo = resting_state_ses_2_eyesopen_loader(base_path, n_channels, n_subjects, d
 
 s1_ec_clean, s1_eo_clean, s2_ec_clean, s2_eo_clean = run_ica_four_dicts(s1_ec, s1_eo, s2_ec, s2_eo, ch_names)
 
-# %%
+
+np.savez('cleaned_resting_state_data.npz', 
+         s1_ec_clean, # = arr_0
+         s1_eo_clean, # = arr_1
+         s2_ec_clean, # = arr_2
+         s2_eo_clean # = arr_3
+         )
